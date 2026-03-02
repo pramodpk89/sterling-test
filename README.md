@@ -7,7 +7,7 @@ An AI-assisted development setup for IBM Sterling OMS customizations — User Ex
 ```
 sterling-test/
 ├── context/
-│   ├── sterling-knowledge.md   # Sterling OMS domain knowledge (feed to AI)
+│   ├── sterling-knowledge.md   # Sterling OMS domain knowledge (loaded by Claude automatically)
 │   └── USAGE.md                # How to use the knowledge file with Claude
 ├── designs/
 │   ├── TEMPLATE.md             # Design doc template — copy for each feature
@@ -18,8 +18,6 @@ sterling-test/
 │   ├── api/                    # Custom APIs (YIFCustomApi extensions)
 │   ├── agent/                  # Background agents (YFSAbstractTask)
 │   └── util/                   # Shared utilities
-├── tools/
-│   └── implement_design.py     # AI agent: design doc → generated code
 ├── .claude/
 │   └── CLAUDE.md               # Claude Code instructions (auto-loaded)
 └── pom.xml
@@ -29,8 +27,7 @@ sterling-test/
 
 - Java 11+
 - Maven 3.8+
-- Python 3.11+ (for the AI agent script)
-- `ANTHROPIC_API_KEY` environment variable set
+- [Claude Code](https://claude.ai/code) CLI installed
 - Sterling OMS JARs installed locally (see [Adding Sterling JARs](#adding-sterling-jars))
 
 ## Getting Started
@@ -38,49 +35,40 @@ sterling-test/
 ```bash
 git clone https://github.com/pramodpk89/sterling-test.git
 cd sterling-test
-pip install anthropic
+claude   # opens Claude Code — Sterling context loads automatically
 ```
 
-## Implementing a Feature with AI
+## Implementing a Feature with Claude
 
 ### 1. Write a design doc
 
-Copy the template and fill it in:
+Copy the template and fill in all sections:
 
 ```bash
 cp designs/TEMPLATE.md designs/implement-my-feature.md
-# Edit the new file
+# Edit designs/implement-my-feature.md
 ```
 
-### 2. Run the implementation agent
+### 2. Ask Claude to implement it
 
-```bash
-python tools/implement_design.py designs/implement-my-feature.md
+Open Claude Code in the project root and ask:
+
+```
+Implement the design doc at designs/implement-my-feature.md
 ```
 
-The script will:
-1. Load `context/sterling-knowledge.md` as the AI system prompt
-2. Call Claude to generate all Java source files
-3. Run `mvn compile` to validate
-4. Git commit on success
+Claude will:
+1. Read `context/sterling-knowledge.md` for Sterling domain knowledge (auto-loaded via `.claude/CLAUDE.md`)
+2. Read the design doc fully
+3. Generate all Java source files listed under "Components to Create"
+4. Follow Sterling coding patterns (YFCDocument, error codes, fail strategy, etc.)
+5. Add registration stubs for `api_list.xml` / `services.xml`
 
-**Options:**
-
-```bash
-# Preview only — no files written
-python tools/implement_design.py --dry-run designs/my-feature.md
-
-# Write files + compile, but don't commit
-python tools/implement_design.py --no-commit designs/my-feature.md
-```
-
-### 3. Using Claude Code directly
-
-Claude Code automatically reads `.claude/CLAUDE.md` and `context/sterling-knowledge.md`
-before making any changes. Just open the project and start coding:
+### 3. Validate and commit
 
 ```bash
-claude
+mvn compile
+git add src/ && git commit -m "feat: implement my-feature"
 ```
 
 ## Adding Sterling JARs

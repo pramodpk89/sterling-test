@@ -42,7 +42,7 @@ When asked to implement a feature from a design doc:
 4. Implement each component following the patterns in `context/sterling-knowledge.md`.
 5. Add registration stubs (comments) for `api_list.xml`/`services.xml` entries.
 6. Write unit test stubs that cover the test matrix from the design doc.
-7. Run `mvn compile` (or equivalent) to validate no compile errors.
+7. Run `mvn compile` to validate no compile errors before presenting the results.
 
 ## 4. Project conventions
 
