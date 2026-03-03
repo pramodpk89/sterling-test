@@ -79,7 +79,79 @@ Jira: <JIRA_URL>/browse/<issue-key>
 Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
 ```
 
-**Step 7 — Raise a PR**
+**Step 7 — Update Jira**
+After the commit succeeds, do the following two things:
+
+**7a — Post a comment with the commit details**
+
+Get the commit SHA and remote URL:
+```
+git rev-parse HEAD
+git remote get-url origin
+```
+
+Build the GitHub commit URL: replace `github.com/<org>/<repo>.git` with `github.com/<org>/<repo>/commit/<SHA>`.
+
+Post a comment to the Jira issue using the Atlassian Document Format (ADF):
+```
+curl -s -u "<JIRA_EMAIL>:<JIRA_TOKEN>" \
+  -X POST \
+  -H "Content-Type: application/json" \
+  "<JIRA_URL>/rest/api/3/issue/<ISSUE_KEY>/comment" \
+  -d '{
+    "body": {
+      "type": "doc",
+      "version": 1,
+      "content": [
+        {
+          "type": "paragraph",
+          "content": [
+            { "type": "text", "text": "✅ Implemented by Claude Code", "marks": [{"type": "strong"}] }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "content": [
+            { "type": "text", "text": "Commit: " },
+            { "type": "text", "text": "<COMMIT_SHA>", "marks": [{"type": "code"}] },
+            { "type": "text", "text": "\nURL: <COMMIT_URL>" }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "content": [
+            { "type": "text", "text": "Files created: <comma-separated list of generated files>" }
+          ]
+        }
+      ]
+    }
+  }'
+```
+
+If the comment POST fails, log the error but continue — do not block the PR step.
+
+**7b — Transition issue status (if currently "To Do")**
+
+Fetch available transitions:
+```
+curl -s -u "<JIRA_EMAIL>:<JIRA_TOKEN>" \
+  "<JIRA_URL>/rest/api/3/issue/<ISSUE_KEY>/transitions"
+```
+
+Find the transition whose `name` is `"In Progress"` (or closest match). If found, apply it:
+```
+curl -s -u "<JIRA_EMAIL>:<JIRA_TOKEN>" \
+  -X POST \
+  -H "Content-Type: application/json" \
+  "<JIRA_URL>/rest/api/3/issue/<ISSUE_KEY>/transitions" \
+  -d '{"transition": {"id": "<TRANSITION_ID>"}}'
+```
+
+If no "In Progress" transition exists or the call fails, skip silently and continue.
+
+---
+
+**Step 8 — Raise a PR**
 Run:
 ```
 gh pr create --title "<issue-key>: <story summary>" --body "$(cat <<'EOF'
@@ -101,8 +173,11 @@ EOF
 
 If `gh` is not installed or not authenticated, skip the PR step and print the PR body so the developer can create it manually.
 
-**Step 8 — Report**
+**Step 9 — Report**
 Print:
 1. Files created
 2. Registration snippets (api_list.xml / services.xml)
-3. Link to the PR (or instructions to create it manually)
+3. Commit SHA and GitHub commit URL
+4. Jira comment posted (or error if it failed)
+5. Jira status transition applied (or skipped)
+6. Link to the PR (or instructions to create it manually)
