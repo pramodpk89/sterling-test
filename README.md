@@ -1,142 +1,212 @@
-# Sterling OMS Customizations
+# Sterling OMS AI Developer
 
-An AI-assisted development setup for IBM Sterling OMS customizations — User Exits, Custom APIs, Services, and Agents.
+An AI-powered development tool for IBM Sterling OMS. Pick a Jira story, run one command — Claude reads the story, writes the Sterling Java code, compiles it, commits, and raises a PR.
 
-## Project Structure
+---
+
+## How It Works
 
 ```
-sterling-test/
-├── context/
-│   ├── sterling-knowledge.md   # Sterling OMS domain knowledge (loaded by Claude automatically)
-│   └── USAGE.md                # How to use the knowledge file with Claude
-├── designs/
-│   ├── TEMPLATE.md             # Design doc template — copy for each feature
-│   └── implement-order-hold-service.md  # Example design doc
-├── src/main/java/com/mycompany/sterling/
-│   ├── ue/                     # User Exits (YFS*UE implementations)
-│   ├── service/                # Custom services
-│   ├── api/                    # Custom APIs (YIFCustomApi extensions)
-│   ├── agent/                  # Background agents (YFSAbstractTask)
-│   └── util/                   # Shared utilities
-├── .claude/
-│   ├── CLAUDE.md               # Claude Code instructions (auto-loaded)
-│   └── commands/               # Slash commands (see below)
-└── pom.xml
+Developer picks a Jira story
+         │
+         ▼
+  /implement-jira KAN-4       ← one command in Claude Code
+         │
+         ├─ Fetches story details from Jira API
+         ├─ Reads Sterling knowledge base (architecture, patterns, APIs)
+         ├─ Generates Java files (UE / Custom API / Service / Agent)
+         ├─ Runs mvn compile — fixes any errors automatically
+         ├─ Commits with structured message linking back to Jira
+         └─ Raises a GitHub PR
 ```
 
-## Prerequisites
+No manual coding. No copy-pasting. The developer reviews the PR.
 
-- Java 11+
-- Maven 3.8+
-- [Claude Code](https://claude.ai/code) CLI installed
-- Sterling OMS JARs installed locally (see [Adding Sterling JARs](#adding-sterling-jars))
+---
 
-## Getting Started
+## One-Time Setup
+
+### 1. Prerequisites
+
+| Tool | Version | Notes |
+|------|---------|-------|
+| Java | 11+ | Already present on Sterling dev machines |
+| Maven | 3.8+ | Already present on Sterling dev machines |
+| Claude Code | latest | Install from https://claude.ai/code |
+| GitHub CLI (`gh`) | latest | For automatic PR creation — optional |
+
+### 2. Clone the repo
 
 ```bash
 git clone https://github.com/pramodpk89/sterling-test.git
 cd sterling-test
-claude   # opens Claude Code — Sterling context loads automatically
 ```
 
-## Slash Commands
+### 3. Create the Jira credentials file
 
-This project includes Claude Code slash commands for common Sterling development tasks. Type any of these inside a Claude Code session:
-
-### Scaffold a new component
+Create a file named `.jira` in the project root (it is gitignored — never committed):
 
 ```
-/new-ue <ClassName> <ApiName>
+JIRA_URL=https://yourcompany.atlassian.net
+JIRA_EMAIL=you@yourcompany.com
+JIRA_TOKEN=<your-api-token>
 ```
-Creates a correctly structured User Exit stub. The UE interface, method name, error codes, and `api_list.xml` snippet are all derived from the arguments.
 
+**Getting your Jira API token:**
+1. Go to https://id.atlassian.com/manage-profile/security/api-tokens
+2. Click **Create API token**
+3. Copy the token into the `.jira` file
+
+### 4. Log in to GitHub CLI (for automatic PRs)
+
+```bash
+gh auth login
+```
+
+If you skip this, `/implement-jira` will print the PR body for you to create manually.
+
+---
+
+## Daily Workflow — Jira to PR
+
+### Step 1 — Open your Jira board and pick a story
+
+Example: `https://yourcompany.atlassian.net/jira/software/projects/KAN/boards/1`
+
+Note the issue key, e.g. **KAN-4**.
+
+### Step 2 — Open Claude Code in the project root
+
+```bash
+cd sterling-test
+claude
+```
+
+Sterling domain knowledge loads automatically. You will see the Claude Code prompt.
+
+### Step 3 — Run the command
+
+```
+/implement-jira KAN-4
+```
+
+Claude will:
+
+1. Read your `.jira` credentials file
+2. Call the Jira API and fetch the full story (summary, description, acceptance criteria)
+3. Read `context/sterling-knowledge.md` — Sterling architecture, patterns, and APIs
+4. Identify what Java files to create from the story description
+5. Implement all business logic described in the story
+6. Run `mvn compile` — if there are errors, fix them and recompile
+7. Commit with a message that includes the Jira issue key and link
+8. Run `gh pr create` to raise a PR
+
+### Step 4 — Review the PR
+
+Claude prints the PR link. Open it in GitHub, review the generated code, and merge.
+
+---
+
+## Writing Good Jira Stories for This Tool
+
+The quality of the generated code depends on the quality of the story. Include these in the story description:
+
+| Field | Example |
+|-------|---------|
+| **What file to create** | `HighValueHoldRule.java` in `com.mycompany.sterling.holds` |
+| **What the class does** | "Checks OrderTotal against threshold, calls changeOrder to apply hold" |
+| **Input XML** | Paste a sample `<Order .../>` element |
+| **Output / action** | Paste the `changeOrder` XML to build |
+| **Error handling** | "If OrderTotal missing: log WARN MYCO_HOLD_001, return false" |
+| **Method signature** | `public boolean evaluateHighValueHold(YFSEnvironment env, Document doc)` |
+| **Unit test cases** | "OrderTotal=5000.00 → no hold; OrderTotal=5000.01 → hold applied" |
+
+See `designs/implement-order-hold-service.md` for a fully worked example.
+
+---
+
+## Other Slash Commands
+
+All commands are typed inside a Claude Code session (`claude` in the project root).
+
+### `/implement-jira <issue-key>`
+Full automated flow: Jira → code → compile → commit → PR.
+```
+/implement-jira KAN-4
+/implement-jira KAN-6
+```
+
+### `/implement <design-doc-path>`
+Implement from a local design doc instead of Jira. Useful when the story isn't in Jira yet or you want to design first.
+```
+/implement designs/implement-order-hold-service.md
+```
+
+### `/review-sterling <file-path>`
+Audits a Java file against 7 Sterling-specific checks and returns a PASS/FAIL report.
+```
+/review-sterling src/main/java/com/mycompany/sterling/ue/BeforeCreateOrderHoldUE.java
+```
+
+### `/new-ue <ClassName> <ApiName>`
+Scaffolds a new User Exit stub with the correct Sterling structure, error codes, and `api_list.xml` snippet.
 ```
 /new-ue OrderHold createOrder
 /new-ue ShipmentAlert confirmShipment
 ```
 
----
-
-```
-/new-api <ClassName>
-```
-Creates a Custom API stub extending `YIFCustomApi`.
-
+### `/new-api <ClassName>`
+Scaffolds a Custom API stub.
 ```
 /new-api PriceOverride
 ```
 
----
-
-```
-/new-agent <ClassName>
-```
-Creates an Agent stub extending `YFSAbstractTask`.
-
+### `/new-agent <ClassName>`
+Scaffolds an Agent stub.
 ```
 /new-agent HoldReview
 ```
 
 ---
 
-### Review an existing file
+## Project Structure
 
 ```
-/review-sterling <file-path>
-```
-Audits a Java file against 7 Sterling-specific checks: XML access patterns, empty-string guards, error code format, logging levels, API response null checks, fail strategy, and forbidden imports. Returns a structured PASS/FAIL report.
-
-```
-/review-sterling src/main/java/com/mycompany/sterling/ue/BeforeCreateOrderHoldUE.java
+sterling-test/
+├── .jira                       # Jira credentials (gitignored — never committed)
+├── .claude/
+│   ├── CLAUDE.md               # Auto-loaded Sterling instructions for Claude
+│   └── commands/               # Slash command definitions
+│       ├── implement-jira.md   → /implement-jira
+│       ├── implement.md        → /implement
+│       ├── review-sterling.md  → /review-sterling
+│       ├── new-ue.md           → /new-ue
+│       ├── new-api.md          → /new-api
+│       └── new-agent.md        → /new-agent
+├── context/
+│   ├── sterling-knowledge.md   # Sterling OMS domain knowledge (auto-loaded)
+│   └── USAGE.md                # Detailed usage guide
+├── designs/
+│   ├── TEMPLATE.md             # Design doc template
+│   └── implement-order-hold-service.md  # Worked example
+├── src/main/java/com/mycompany/sterling/
+│   ├── ue/                     # User Exits
+│   ├── service/                # Custom services
+│   ├── api/                    # Custom APIs
+│   ├── agent/                  # Background agents
+│   ├── holds/                  # Hold rule classes
+│   └── util/                   # Shared utilities
+└── pom.xml
 ```
 
 ---
-
-### Implement a full design doc
-
-```
-/implement <design-doc-path>
-```
-Reads the design doc, implements all components listed in "Components to Create" with full business logic, runs `mvn compile`, fixes any errors, then prints the registration snippets and properties to add.
-
-```
-/implement designs/implement-order-hold-service.md
-```
-
----
-
-## Implementing a Feature
-
-### 1. Write a design doc
-
-Copy the template and fill in all sections:
-
-```bash
-cp designs/TEMPLATE.md designs/implement-my-feature.md
-# Edit designs/implement-my-feature.md
-```
-
-### 2. Implement with a slash command
-
-Open Claude Code in the project root and run:
-
-```
-/implement designs/implement-my-feature.md
-```
-
-Claude will read the Sterling knowledge base, implement every component in the design doc, compile, and report the registration snippets.
-
-### 3. Commit
-
-```bash
-git add src/ && git commit -m "feat: implement my-feature"
-```
 
 ## Adding Sterling JARs
 
-Sterling JARs are not redistributable. Install them into your local Maven repo from your Sterling installation:
+Sterling JARs are not redistributable. Install them from your Sterling installation into your local Maven repo:
 
-```bash
+**Windows:**
+```cmd
 mvn install:install-file -Dfile=%STERLING_HOME%\jar\yfsjapi.jar ^
   -DgroupId=com.yantra -DartifactId=yfsjapi -Dversion=10.0 -Dpackaging=jar
 
@@ -149,6 +219,10 @@ mvn install:install-file -Dfile=%STERLING_HOME%\jar\yifclient.jar ^
 
 Then uncomment the Sterling dependencies in `pom.xml`.
 
+Until JARs are installed, generated code uses `org.w3c.dom` stubs. Each stub includes a comment showing the real Sterling `YFCDocument` / `YFCElement` pattern to use once JARs are available.
+
+---
+
 ## Building
 
 ```bash
@@ -157,13 +231,18 @@ mvn test           # compile + run tests
 mvn package        # build JAR → target/sterling-customizations-1.0.0-SNAPSHOT.jar
 ```
 
+---
+
 ## Deploying to Sterling
 
 1. Copy the JAR to `%STERLING_HOME%\extensions\global\lib\`
-2. Register components in `%STERLING_HOME%\extensions\global\api_list.xml`
+2. Copy registration entries into `%STERLING_HOME%\extensions\global\api_list.xml`
+   (snippets are printed by every slash command after code generation)
 3. Restart the Sterling application server
 
 See `context/sterling-knowledge.md` Section D for full configuration details.
+
+---
 
 ## Conventions
 

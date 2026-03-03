@@ -1,71 +1,143 @@
-# How to Use sterling-knowledge.md
+# Developer Usage Guide
 
-`context/sterling-knowledge.md` is the authoritative Sterling OMS domain knowledge
-file for this project. It makes Claude significantly more effective by giving it
-the architecture, patterns, APIs, and conventions it needs upfront — without
-hallucinating Sterling-specific details.
+This guide explains how to use the AI-powered Sterling OMS development workflow day to day.
 
 ---
 
-## Recommended: Claude Code (auto-loaded)
+## The Two Workflows
 
-The `.claude/CLAUDE.md` file in this repo instructs Claude Code to read
-`context/sterling-knowledge.md` before making any code changes. This means every
-Claude Code session in this project automatically has Sterling domain knowledge.
+### Workflow A — Jira story to PR (recommended)
+
+Write the story in Jira → run one command → get a PR.
+
+```
+/implement-jira KAN-4
+```
+
+### Workflow B — Design doc to code
+
+Write a local design doc → run one command → get compiled code.
+
+```
+/implement designs/my-feature.md
+```
+
+Use Workflow B when the story lives outside Jira, or when you want to design in detail before generating code.
+
+---
+
+## Workflow A — Step by Step
+
+### Prerequisites (one-time)
+
+1. Create a `.jira` file in the project root:
+   ```
+   JIRA_URL=https://yourcompany.atlassian.net
+   JIRA_EMAIL=you@yourcompany.com
+   JIRA_TOKEN=<api-token from https://id.atlassian.com/manage-profile/security/api-tokens>
+   ```
+2. Run `gh auth login` for automatic PR creation (optional).
+
+### Running it
 
 ```bash
-# Open Claude Code in the project root
-claude
-
-# Ask Claude to implement a design doc
-> Implement the design doc at designs/implement-order-hold-service.md
+cd sterling-test
+claude                        # open Claude Code — context loads automatically
+/implement-jira KAN-4         # type this at the Claude Code prompt
 ```
 
-Claude will read the knowledge file, read the design doc, and generate all the
-Java source files following Sterling patterns.
+### What Claude does automatically
+
+| Step | What happens |
+|------|-------------|
+| Fetch | Calls Jira REST API, reads summary + full description |
+| Analyse | Identifies Java files, packages, component type (UE/API/Service/Agent) |
+| Implement | Writes all business logic from the story's acceptance criteria |
+| Compile | Runs `mvn compile`, fixes any errors |
+| Commit | `git commit` with message referencing the Jira key |
+| PR | `gh pr create` with summary and Jira link |
+
+### What you do
+
+Review the PR. Merge when happy.
 
 ---
 
-## Option: Feed as a system prompt to Claude CLI
+## Workflow B — Step by Step
 
-For one-off tasks outside Claude Code:
+### 1. Copy the template
 
 ```bash
-claude --system-prompt "$(cat context/sterling-knowledge.md)" \
-       "Implement the design doc at designs/implement-order-hold-service.md"
+cp designs/TEMPLATE.md designs/implement-my-feature.md
+```
+
+### 2. Fill in the design doc
+
+Open `designs/implement-my-feature.md` and complete every section:
+- **Components to Create** — list every Java file with package and type
+- **Business Logic** — number each rule clearly
+- **Error Handling** — specify fail-open or fail-closed and all error codes
+- **Input / Output XML** — paste sample documents
+
+See `designs/implement-order-hold-service.md` for a fully worked example.
+
+### 3. Implement
+
+```bash
+claude                                             # open Claude Code
+/implement designs/implement-my-feature.md        # generates code + compiles
+```
+
+### 4. Commit and push
+
+```bash
+git add src/
+git commit -m "feat: implement my-feature"
+git push
 ```
 
 ---
 
-## Option: Use as a RAG source (vector database)
+## Writing Stories That Work Well
 
-For larger teams or when the knowledge file grows too large for a context window,
-chunk it into a vector database and retrieve relevant sections at query time.
+The `/implement-jira` command is only as good as the story. Follow this checklist when writing stories in Jira:
 
-Split on `## Section` headers — each section is a semantically coherent unit:
-
-```python
-import re
-
-with open("context/sterling-knowledge.md") as f:
-    content = f.read()
-
-chunks = re.split(r"\n## ", content)
-chunks = [c.strip() for c in chunks if c.strip()]
-# Store each chunk with metadata: {"source": "sterling-knowledge.md", "section": "A"}
-```
+- [ ] State the **file name and package** explicitly (e.g. `HighValueHoldRule.java` in `com.mycompany.sterling.holds`)
+- [ ] Describe **what the class does** in plain English
+- [ ] Include a **sample input XML** element
+- [ ] Include the **output XML** or action (e.g. the `changeOrder` XML to build)
+- [ ] List **error codes** using the `MYCO_<MODULE>_NNN` format
+- [ ] State the **fail strategy** — fail-open (order proceeds on error) or fail-closed (error blocks the order)
+- [ ] List **unit test cases** as bullet points with expected return values
 
 ---
 
-## Keeping the knowledge file up to date
+## Keeping `sterling-knowledge.md` Up to Date
 
-| When | What to update |
-|------|----------------|
-| New Sterling API used | Add row to Section C table |
-| New project convention established | Update Section E |
-| New error code series introduced | Add to Section E error code table |
-| Sterling version upgraded | Review Section A and Section D for breaking changes |
-| New extension point discovered | Add pattern to Section B |
+`context/sterling-knowledge.md` is the source of truth that makes generated code correct. Update it when:
 
-Treat `sterling-knowledge.md` like a living architecture decision record (ADR):
-update it when the project evolves, and commit it alongside the code changes it describes.
+| Event | What to update |
+|-------|---------------|
+| New Sterling API used in the project | Add a row to the Section C table |
+| New error code series introduced | Add to the Section E error code table |
+| New project convention agreed | Update Section E |
+| Sterling version upgraded | Review Section A and Section D |
+| New UE interface or extension point discovered | Add pattern to Section B |
+
+Commit `sterling-knowledge.md` alongside the code change that prompted the update.
+
+---
+
+## Troubleshooting
+
+**`/implement-jira` says "Missing .jira credentials file"**
+Create `.jira` in the project root with `JIRA_URL`, `JIRA_EMAIL`, and `JIRA_TOKEN`.
+
+**`/implement-jira` returns a Jira error**
+Check that your API token is valid and has read access to the project. Regenerate at https://id.atlassian.com/manage-profile/security/api-tokens.
+
+**`mvn compile` fails after code generation**
+Claude will attempt to fix compile errors automatically. If it cannot, run `/review-sterling` on the generated file — it will identify the exact issue.
+
+**PR creation fails**
+Run `gh auth login` and try again. If `gh` is not installed, Claude prints the PR body so you can create it manually on GitHub.
