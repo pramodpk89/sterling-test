@@ -19,31 +19,62 @@ Read the file `.jira` in the project root. Parse the three lines:
 If `.jira` is missing, stop and respond:
 "Missing .jira credentials file. Create it with JIRA_URL, JIRA_EMAIL, JIRA_TOKEN."
 
+---
+
 **Step 2 — Fetch the Jira issue**
-Run this curl command using the credentials from Step 1:
 ```
 curl -s -u "<JIRA_EMAIL>:<JIRA_TOKEN>" "<JIRA_URL>/rest/api/3/issue/<ISSUE_KEY>"
 ```
 
 Parse the JSON response. Extract:
 - `fields.summary` → feature name
-- `fields.description` → full story description (walk the Atlassian Document Format content tree: for each block in `content`, for each node in its `content`, collect `text` values)
+- `fields.description` → full story description (walk Atlassian Document Format: collect all `text` node values recursively)
 - `fields.issuetype.name` → issue type
 - `fields.status.name` → current status
 
 If the response contains `errorMessages`, stop and print the error.
 
-**Step 3 — Map story to Sterling component type**
+---
+
+**Step 3 — Create a feature branch**
+
+Derive the branch name from the issue key and summary:
+- Lowercase the summary
+- Replace spaces and special characters with hyphens
+- Truncate to 50 characters
+- Final format: `feature/<ISSUE-KEY>-<slug>`
+- Example: `feature/KAN-6-implement-high-value-order-hold-rule`
+
+Determine the base branch (main or master):
+```
+git remote show origin | grep "HEAD branch"
+```
+
+Switch to the base branch and pull latest, then create and switch to the feature branch:
+```
+git checkout <base-branch>
+git pull origin <base-branch>
+git checkout -b feature/<ISSUE-KEY>-<slug>
+```
+
+If the branch already exists, stop and respond:
+"Branch feature/<ISSUE-KEY>-<slug> already exists. Delete it or use a different issue key."
+
+---
+
+**Step 4 — Map story to Sterling component type**
 From the description, determine:
-- What Java files to create (look for class names, package names, file names mentioned)
+- What Java files to create (class names, package names, file names)
 - What Sterling component type each file is (User Exit / Custom API / Service / Agent)
 - What business logic to implement (rules, conditions, error handling)
 - What Sterling APIs are called (changeOrder, getOrderDetails, etc.)
-- What error codes to use (look for MYCO_* codes; if none, derive from the feature name)
+- What error codes to use (look for MYCO_* codes; derive if absent)
 - Fail strategy (fail-open unless description says otherwise)
 
-**Step 4 — Implement the code**
-For each file identified in Step 3:
+---
+
+**Step 5 — Implement the code**
+For each file identified in Step 4:
 
 a. Apply the correct pattern from Section B of `context/sterling-knowledge.md`
 
@@ -58,17 +89,21 @@ b. Sterling JARs are absent — use `org.w3c.dom` with YFC pattern comments:
 
 c. Use `SterlingAPIHelper` from `com.mycompany.sterling.util` for all attribute reads and API calls.
 
-d. Implement ALL business logic from the story description — not a stub.
+d. Implement ALL business logic from the story — not a stub.
 
 e. Include the registration snippet (api_list.xml / services.xml) as a Javadoc `<pre>` comment.
 
 f. Place files at the correct path matching the package in the story.
 
-**Step 5 — Compile**
+---
+
+**Step 6 — Compile**
 Run `mvn compile`. If it fails, fix the errors and recompile until clean.
 
-**Step 6 — Commit**
-Stage only the newly created source files and commit with this message format:
+---
+
+**Step 7 — Commit to the feature branch**
+Stage only the newly created source files and commit:
 ```
 feat(<issue-key>): <story summary in lowercase>
 
@@ -79,20 +114,58 @@ Jira: <JIRA_URL>/browse/<issue-key>
 Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
 ```
 
-**Step 7 — Update Jira**
-After the commit succeeds, do the following two things:
-
-**7a — Post a comment with the commit details**
-
-Get the commit SHA and remote URL:
+Get the commit SHA for use in later steps:
 ```
 git rev-parse HEAD
-git remote get-url origin
 ```
 
-Build the GitHub commit URL: replace `github.com/<org>/<repo>.git` with `github.com/<org>/<repo>/commit/<SHA>`.
+---
 
-Post a comment to the Jira issue using the Atlassian Document Format (ADF):
+**Step 8 — Push the feature branch**
+```
+git push -u origin feature/<ISSUE-KEY>-<slug>
+```
+
+Build the GitHub commit URL from the remote origin URL and the commit SHA:
+- Strip `.git` suffix from remote URL
+- Append `/commit/<SHA>`
+
+---
+
+**Step 9 — Raise a PR**
+```
+gh pr create \
+  --base <base-branch> \
+  --head feature/<ISSUE-KEY>-<slug> \
+  --title "<ISSUE-KEY>: <story summary>" \
+  --body "$(cat <<'EOF'
+## Summary
+<2-3 bullet points from the story>
+
+## Jira
+<JIRA_URL>/browse/<ISSUE-KEY>
+
+## Test plan
+- [ ] mvn compile passes
+- [ ] Unit tests cover rule boundary conditions
+- [ ] Sterling registration stubs present in Javadoc
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+EOF
+)"
+```
+
+Capture the PR URL printed by `gh pr create`.
+
+If `gh` is not installed or not authenticated, skip and print the PR body for manual creation. Set PR_URL to "(PR not created — create manually)".
+
+---
+
+**Step 10 — Update Jira**
+
+**10a — Post a comment with commit and PR details**
+
+Post one comment containing both the commit SHA and the PR link:
 ```
 curl -s -u "<JIRA_EMAIL>:<JIRA_TOKEN>" \
   -X POST \
@@ -112,15 +185,28 @@ curl -s -u "<JIRA_EMAIL>:<JIRA_TOKEN>" \
         {
           "type": "paragraph",
           "content": [
-            { "type": "text", "text": "Commit: " },
-            { "type": "text", "text": "<COMMIT_SHA>", "marks": [{"type": "code"}] },
-            { "type": "text", "text": "\nURL: <COMMIT_URL>" }
+            { "type": "text", "text": "Branch: " },
+            { "type": "text", "text": "feature/<ISSUE-KEY>-<slug>", "marks": [{"type": "code"}] }
           ]
         },
         {
           "type": "paragraph",
           "content": [
-            { "type": "text", "text": "Files created: <comma-separated list of generated files>" }
+            { "type": "text", "text": "Commit: " },
+            { "type": "text", "text": "<COMMIT_SHA>", "marks": [{"type": "code"}] },
+            { "type": "text", "text": " — <COMMIT_URL>" }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "content": [
+            { "type": "text", "text": "PR: <PR_URL>" }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "content": [
+            { "type": "text", "text": "Files: <comma-separated list of generated files>" }
           ]
         }
       ]
@@ -128,9 +214,9 @@ curl -s -u "<JIRA_EMAIL>:<JIRA_TOKEN>" \
   }'
 ```
 
-If the comment POST fails, log the error but continue — do not block the PR step.
+If the POST fails, log the error but do not stop.
 
-**7b — Transition issue status (if currently "To Do")**
+**10b — Transition issue to "In Progress"**
 
 Fetch available transitions:
 ```
@@ -138,7 +224,7 @@ curl -s -u "<JIRA_EMAIL>:<JIRA_TOKEN>" \
   "<JIRA_URL>/rest/api/3/issue/<ISSUE_KEY>/transitions"
 ```
 
-Find the transition whose `name` is `"In Progress"` (or closest match). If found, apply it:
+Find the transition named `"In Progress"`. If found, apply it:
 ```
 curl -s -u "<JIRA_EMAIL>:<JIRA_TOKEN>" \
   -X POST \
@@ -147,37 +233,25 @@ curl -s -u "<JIRA_EMAIL>:<JIRA_TOKEN>" \
   -d '{"transition": {"id": "<TRANSITION_ID>"}}'
 ```
 
-If no "In Progress" transition exists or the call fails, skip silently and continue.
+If no match or call fails, skip silently.
 
 ---
 
-**Step 8 — Raise a PR**
-Run:
+**Step 11 — Report**
+Print a summary:
 ```
-gh pr create --title "<issue-key>: <story summary>" --body "$(cat <<'EOF'
-## Summary
-<bullet points from the story>
+✅ Done — <ISSUE-KEY>: <summary>
 
-## Jira
-<JIRA_URL>/browse/<issue-key>
+Branch:  feature/<ISSUE-KEY>-<slug>
+Commit:  <COMMIT_SHA>
+         <COMMIT_URL>
+PR:      <PR_URL>
+Jira:    <JIRA_URL>/browse/<ISSUE-KEY>  (status → In Progress)
 
-## Test plan
-- [ ] mvn compile passes
-- [ ] Unit tests cover rule boundary conditions
-- [ ] Verify Sterling registration stubs are present in Javadoc
+Files created:
+  - <file1>
+  - <file2>
 
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-EOF
-)"
+Registration snippets to add to api_list.xml / services.xml:
+<paste snippets here>
 ```
-
-If `gh` is not installed or not authenticated, skip the PR step and print the PR body so the developer can create it manually.
-
-**Step 9 — Report**
-Print:
-1. Files created
-2. Registration snippets (api_list.xml / services.xml)
-3. Commit SHA and GitHub commit URL
-4. Jira comment posted (or error if it failed)
-5. Jira status transition applied (or skipped)
-6. Link to the PR (or instructions to create it manually)

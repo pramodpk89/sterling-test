@@ -13,11 +13,14 @@ Developer picks a Jira story
   /implement-jira KAN-4       ← one command in Claude Code
          │
          ├─ Fetches story details from Jira API
+         ├─ Creates feature branch  feature/KAN-4-<slug>  from main
          ├─ Reads Sterling knowledge base (architecture, patterns, APIs)
          ├─ Generates Java files (UE / Custom API / Service / Agent)
          ├─ Runs mvn compile — fixes any errors automatically
-         ├─ Commits with structured message linking back to Jira
-         └─ Raises a GitHub PR
+         ├─ Commits to feature branch with message linking back to Jira
+         ├─ Pushes feature branch
+         ├─ Raises a GitHub PR  (feature/KAN-4-<slug> → main)
+         └─ Updates Jira: commit SHA + PR link + status → In Progress
 ```
 
 No manual coding. No copy-pasting. The developer reviews the PR.

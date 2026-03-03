@@ -51,11 +51,14 @@ claude                        # open Claude Code — context loads automatically
 | Step | What happens |
 |------|-------------|
 | Fetch | Calls Jira REST API, reads summary + full description |
+| Branch | Creates `feature/<KEY>-<slug>` from main and switches to it |
 | Analyse | Identifies Java files, packages, component type (UE/API/Service/Agent) |
 | Implement | Writes all business logic from the story's acceptance criteria |
 | Compile | Runs `mvn compile`, fixes any errors |
-| Commit | `git commit` with message referencing the Jira key |
-| PR | `gh pr create` with summary and Jira link |
+| Commit | `git commit` on the feature branch with message referencing the Jira key |
+| Push | Pushes feature branch to origin |
+| PR | `gh pr create` from feature branch → main |
+| Jira | Posts commit SHA + PR link as comment; transitions issue → In Progress |
 
 ### What you do
 
