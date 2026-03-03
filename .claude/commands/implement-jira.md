@@ -10,14 +10,18 @@ If no argument is provided, stop and respond:
 
 Execute these steps in order. Do not skip any step.
 
-**Step 1 — Load Jira credentials**
-Read the file `.jira` in the project root. Parse the three lines:
+**Step 1 — Load credentials**
+Read the file `.jira` in the project root. Parse all four lines:
 - JIRA_URL
 - JIRA_EMAIL
 - JIRA_TOKEN
+- GITHUB_TOKEN
 
 If `.jira` is missing, stop and respond:
-"Missing .jira credentials file. Create it with JIRA_URL, JIRA_EMAIL, JIRA_TOKEN."
+"Missing .jira credentials file. Create it with JIRA_URL, JIRA_EMAIL, JIRA_TOKEN, GITHUB_TOKEN."
+
+If GITHUB_TOKEN is empty, stop and respond:
+"GITHUB_TOKEN is not set in .jira. Generate one at https://github.com/settings/tokens (scopes needed: repo) and add it."
 
 ---
 
@@ -132,32 +136,31 @@ Build the GitHub commit URL from the remote origin URL and the commit SHA:
 
 ---
 
-**Step 9 — Raise a PR**
+**Step 9 — Raise a PR via GitHub API**
+
+Derive the GitHub owner and repo from the remote URL:
 ```
-gh pr create \
-  --base <base-branch> \
-  --head feature/<ISSUE-KEY>-<slug> \
-  --title "<ISSUE-KEY>: <story summary>" \
-  --body "$(cat <<'EOF'
-## Summary
-<2-3 bullet points from the story>
+git remote get-url origin
+```
+Strip `https://github.com/` and `.git` to get `<owner>/<repo>` (e.g. `pramodpk89/sterling-test`).
 
-## Jira
-<JIRA_URL>/browse/<ISSUE-KEY>
-
-## Test plan
-- [ ] mvn compile passes
-- [ ] Unit tests cover rule boundary conditions
-- [ ] Sterling registration stubs present in Javadoc
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-EOF
-)"
+Build the PR body, then call the GitHub REST API:
+```
+curl -s -X POST \
+  -H "Authorization: Bearer <GITHUB_TOKEN>" \
+  -H "Content-Type: application/json" \
+  "https://api.github.com/repos/<owner>/<repo>/pulls" \
+  -d '{
+    "title": "<ISSUE-KEY>: <story summary>",
+    "body": "## Summary\n<2-3 bullet points from the story>\n\n## Jira\n<JIRA_URL>/browse/<ISSUE-KEY>\n\n## Test plan\n- [ ] mvn compile passes\n- [ ] Unit tests cover rule boundary conditions\n- [ ] Sterling registration stubs present in Javadoc\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)",
+    "head": "feature/<ISSUE-KEY>-<slug>",
+    "base": "<base-branch>"
+  }'
 ```
 
-Capture the PR URL printed by `gh pr create`.
+Parse the response JSON. Extract `html_url` — this is the PR URL.
 
-If `gh` is not installed or not authenticated, skip and print the PR body for manual creation. Set PR_URL to "(PR not created — create manually)".
+If the response contains `errors` or `message`, print the error and set PR_URL to "(PR creation failed — create manually at https://github.com/<owner>/<repo>/compare/feature/<ISSUE-KEY>-<slug>)".
 
 ---
 

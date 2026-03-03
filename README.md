@@ -60,13 +60,18 @@ JIRA_TOKEN=<your-api-token>
 2. Click **Create API token**
 3. Copy the token into the `.jira` file
 
-### 4. Log in to GitHub CLI (for automatic PRs)
+### 4. Add a GitHub token (for automatic PRs)
 
-```bash
-gh auth login
+Generate a Personal Access Token at https://github.com/settings/tokens
+- Select **Classic token**
+- Scopes needed: `repo`
+
+Add it to your `.jira` file:
+```
+GITHUB_TOKEN=<your-token>
 ```
 
-If you skip this, `/implement-jira` will print the PR body for you to create manually.
+No extra tools needed — PRs are raised via the GitHub REST API directly.
 
 ---
 
