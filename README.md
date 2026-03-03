@@ -19,7 +19,8 @@ sterling-test/
 │   ├── agent/                  # Background agents (YFSAbstractTask)
 │   └── util/                   # Shared utilities
 ├── .claude/
-│   └── CLAUDE.md               # Claude Code instructions (auto-loaded)
+│   ├── CLAUDE.md               # Claude Code instructions (auto-loaded)
+│   └── commands/               # Slash commands (see below)
 └── pom.xml
 ```
 
@@ -38,7 +39,73 @@ cd sterling-test
 claude   # opens Claude Code — Sterling context loads automatically
 ```
 
-## Implementing a Feature with Claude
+## Slash Commands
+
+This project includes Claude Code slash commands for common Sterling development tasks. Type any of these inside a Claude Code session:
+
+### Scaffold a new component
+
+```
+/new-ue <ClassName> <ApiName>
+```
+Creates a correctly structured User Exit stub. The UE interface, method name, error codes, and `api_list.xml` snippet are all derived from the arguments.
+
+```
+/new-ue OrderHold createOrder
+/new-ue ShipmentAlert confirmShipment
+```
+
+---
+
+```
+/new-api <ClassName>
+```
+Creates a Custom API stub extending `YIFCustomApi`.
+
+```
+/new-api PriceOverride
+```
+
+---
+
+```
+/new-agent <ClassName>
+```
+Creates an Agent stub extending `YFSAbstractTask`.
+
+```
+/new-agent HoldReview
+```
+
+---
+
+### Review an existing file
+
+```
+/review-sterling <file-path>
+```
+Audits a Java file against 7 Sterling-specific checks: XML access patterns, empty-string guards, error code format, logging levels, API response null checks, fail strategy, and forbidden imports. Returns a structured PASS/FAIL report.
+
+```
+/review-sterling src/main/java/com/mycompany/sterling/ue/BeforeCreateOrderHoldUE.java
+```
+
+---
+
+### Implement a full design doc
+
+```
+/implement <design-doc-path>
+```
+Reads the design doc, implements all components listed in "Components to Create" with full business logic, runs `mvn compile`, fixes any errors, then prints the registration snippets and properties to add.
+
+```
+/implement designs/implement-order-hold-service.md
+```
+
+---
+
+## Implementing a Feature
 
 ### 1. Write a design doc
 
@@ -49,41 +116,34 @@ cp designs/TEMPLATE.md designs/implement-my-feature.md
 # Edit designs/implement-my-feature.md
 ```
 
-### 2. Ask Claude to implement it
+### 2. Implement with a slash command
 
-Open Claude Code in the project root and ask:
+Open Claude Code in the project root and run:
 
 ```
-Implement the design doc at designs/implement-my-feature.md
+/implement designs/implement-my-feature.md
 ```
 
-Claude will:
-1. Read `context/sterling-knowledge.md` for Sterling domain knowledge (auto-loaded via `.claude/CLAUDE.md`)
-2. Read the design doc fully
-3. Generate all Java source files listed under "Components to Create"
-4. Follow Sterling coding patterns (YFCDocument, error codes, fail strategy, etc.)
-5. Add registration stubs for `api_list.xml` / `services.xml`
+Claude will read the Sterling knowledge base, implement every component in the design doc, compile, and report the registration snippets.
 
-### 3. Validate and commit
+### 3. Commit
 
 ```bash
-mvn compile
 git add src/ && git commit -m "feat: implement my-feature"
 ```
 
 ## Adding Sterling JARs
 
-Sterling JARs are not redistributable. Install them into your local Maven repo from
-your Sterling installation:
+Sterling JARs are not redistributable. Install them into your local Maven repo from your Sterling installation:
 
 ```bash
-mvn install:install-file -Dfile=$STERLING_HOME/jar/yfsjapi.jar \
+mvn install:install-file -Dfile=%STERLING_HOME%\jar\yfsjapi.jar ^
   -DgroupId=com.yantra -DartifactId=yfsjapi -Dversion=10.0 -Dpackaging=jar
 
-mvn install:install-file -Dfile=$STERLING_HOME/jar/yfcapi.jar \
+mvn install:install-file -Dfile=%STERLING_HOME%\jar\yfcapi.jar ^
   -DgroupId=com.yantra -DartifactId=yfcapi -Dversion=10.0 -Dpackaging=jar
 
-mvn install:install-file -Dfile=$STERLING_HOME/jar/yifclient.jar \
+mvn install:install-file -Dfile=%STERLING_HOME%\jar\yifclient.jar ^
   -DgroupId=com.yantra -DartifactId=yifclient -Dversion=10.0 -Dpackaging=jar
 ```
 
@@ -99,8 +159,8 @@ mvn package        # build JAR → target/sterling-customizations-1.0.0-SNAPSHOT
 
 ## Deploying to Sterling
 
-1. Copy the JAR to `$STERLING_HOME/extensions/global/lib/`
-2. Register components in `$STERLING_HOME/extensions/global/api_list.xml`
+1. Copy the JAR to `%STERLING_HOME%\extensions\global\lib\`
+2. Register components in `%STERLING_HOME%\extensions\global\api_list.xml`
 3. Restart the Sterling application server
 
 See `context/sterling-knowledge.md` Section D for full configuration details.
